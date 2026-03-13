@@ -1,0 +1,11 @@
+pandas
+numpy
+cvxpy
+yfinance
+fredapi
+pyarrow
+seaborn
+matplotlib
+
+jupyter
+ipykernel
