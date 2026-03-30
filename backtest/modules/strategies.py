@@ -1,6 +1,8 @@
 import numpy as np
 import cvxpy as cp
-from .backtestdata import DataLoader
+import matplotlib.pyplot as plt
+
+from .backtestdata import DataLoader, DataBuilder
 from abc import ABC, abstractmethod
 from typing import Sequence
 
@@ -32,30 +34,38 @@ class BacktestStrategy(ABC):
 class MetaStrategy(BacktestStrategy):
     def __init__(
             self,
+            db: DataBuilder,
             strategies: list[BacktestStrategy],
             w_blend: np.ndarray,
         ):
-        super().__init__(strategies[0].dl)
+        tickers = np.unique([t for s in strategies for t in s.dl.tickers]).tolist()
+        super().__init__(DataLoader(db=db, tickers=tickers))
+        
         S = len(strategies)
         assert w_blend.shape[0] == S, S
         assert w_blend.sum() == 1.0, w_blend.sum()
-        # assert np.all([dl is s.dl for s in strategies]), dl
+
         self.strategies = strategies
         self.w_blend = w_blend
-        
-
         self.S = S
+
+        self.indicies = []
+        for s in range(self.S):
+            t2i = {t: i for i, t in enumerate(self.dl.tickers)}
+            i_T = np.array([t2i[t] for t in self.strategies[s].dl.tickers])
+            self.indicies.append(i_T)
+
         # self.pv = ...  # record performance over time, to compute trailing vol
     
     def get_trade_flag(self, t: int):
         return self.dl.get_trade_flag(t)
-
+    
     def get_weights(self, t: int, w_prev: np.ndarray):
         w = np.zeros(self.dl.N)
         for s in range(self.S):
-            strategy = self.strategies[s]
-            wb = self.w_blend[s]
-            w += wb * strategy.get_weights(t, w_prev)
+            b = self.w_blend[s]
+            i_T = self.indicies[s]
+            w[i_T] += b * self.strategies[s].get_weights(t, w_prev[i_T]/b)
         return w
 
 
@@ -105,28 +115,29 @@ class Markowitz(BacktestStrategy):
             gamma  = self.gamma, 
             lev    = self.lev, 
             vc_lim = self.vc_lim
-            )
+        )
         w = self.normalize_weights(w, self.lev)
         w[~asset_mask] = 0.0
         return w
 
 def markowitz(
-        at: np.ndarray, 
-        Ft: np.ndarray, 
+        at: np.ndarray,
+        Ft: np.ndarray,
         dt: np.ndarray,
-        w_prev: np.ndarray, 
-        w_max: np.ndarray, 
-        gamma: float, 
-        lev: float, 
+        w_prev: np.ndarray,
+        w_max: np.ndarray,
+        gamma: float,
+        lev: float,
         vc_lim: float
     ) -> np.ndarray:
-    w = cp.Variable(len(at))
+    w = cp.Variable(at.shape[0])
     vol = cp.norm2(cp.hstack(( Ft.T @ w, cp.multiply(dt**0.5, w) )))
     prob = cp.Problem(
         objective=cp.Maximize(at @ w - gamma * cp.norm1(w - w_prev)),
         constraints=[
             vol <= vc_lim,         # volatility control
-            0.0 <= w, w <= w_max,  # no shorting, capped positions
+            0.0 <= w,              # no shorting
+            w <= w_max,            # capped positions
             cp.sum(w) <= 1 + lev,  # leverage
         ],
     )
@@ -159,23 +170,22 @@ class FixedWeights(BacktestStrategy):
     def get_weights(self, t:int, w_prev:np.ndarray) -> np.ndarray:
         assert w_prev.shape       == (self.dl.N,), w_prev.shape
         assert self.w_rebal.shape == (self.dl.N,), self.w_rebal.shape
-        asset_mask = self.dl.get_asset_mask(t-1)
+        asset_mask  = self.dl.get_asset_mask(t-1)
         asset_mask &= self.dl.get_asset_mask(t)  # check for discontinuation
         Ft = self.dl.get_F_cov(t-1)
         dt = self.dl.get_d_var(t-1)
         w = self.w_rebal.copy()
         
         if not asset_mask.all():
-            w = self.w_rebal.copy()
             w[~asset_mask] = 0.0
-            w_sum = w.sum()
-            w = w / (w_sum + 1e-8)
+            w = w / (w.sum() + 1e-8)
 
         if self.vc_lim is not None:
             vol = np.linalg.norm(np.hstack(( Ft.T @ w, dt**0.5 * w )), ord=2)
             k = self.vc_lim / (vol + 1e-8)
             k = np.minimum(k, 1.0 + self.lev)
             w = k * w  # scaling for vol control
+
         w = self.normalize_weights(w, self.lev)
         return w
 
@@ -194,4 +204,12 @@ class MinimumVol(BacktestStrategy):
     def get_weights(self, dl: DataLoader, t:int, w_prev: np.ndarray) -> np.ndarray:
         ...
         return w_prev
+
+def asset_plot(strategy: BacktestStrategy, figsize=(12,3)) -> None:
+    ret = strategy.dl._ret.copy()
+    ret[~strategy.dl._asset_mask] = 1.0
+    plt.figure(figsize=figsize)
+    plt.plot(strategy.dl.timeline, ret.cumprod(axis=0)-1.0, label=strategy.dl.tickers)
+    plt.legend()
+    plt.show()
 

@@ -2,9 +2,7 @@ import numpy as np
 import pandas as pd
 import time
 import matplotlib.pyplot as plt
-from .backtestdata import DataLoader
 from .strategies import BacktestStrategy
-
 
 class BacktestSimulator:
     def __init__(
@@ -20,11 +18,11 @@ class BacktestSimulator:
     def run_backtest(self, strategy: BacktestStrategy, verbose=False) -> None:
         t0 = time.time()
         dl = strategy.dl
-        T, N = dl.T, dl.N # T timesteps, N etfs
+        T, N = dl.T, dl.N  # T timesteps, N etfs
         
         portfolio_weights = np.empty((T, N+1), dtype=float)
         portfolio_value = np.empty((T, 1), dtype=float)
-        v = 1.0 # running value
+        v = 1.0  # running value
         w = np.ones(N) / N
         w_cash = 0.0
 
@@ -64,7 +62,7 @@ class BacktestSimulator:
         self.pv = portfolio_value
         self.strategy = strategy
         self.time = time.time() - t0
-        if verbose == True: print_results(self)
+        if verbose == True: print_simulator_results(self)
 
     @property
     def ann_sharpe(self) -> float:
@@ -115,7 +113,7 @@ def wealth_plot(sim: BacktestSimulator, figsize=(12,3)) -> None:
     plt.legend()
     plt.show()
 
-def print_results(sim: BacktestSimulator) -> None:
+def print_simulator_results(sim: BacktestSimulator) -> None:
     print(f"Backtest Runtime: {round(sim.time*1000)} ms")
     print(f"Ann Sharpe: {sim.ann_sharpe.round(4)}")
     print(f"Tot Ret:    {sim.tot_ret.round(4)}")

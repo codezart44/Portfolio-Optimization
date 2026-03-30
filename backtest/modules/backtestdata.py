@@ -6,6 +6,7 @@ from .riskmodel import Riskmodel
 class DataBuilder:
     def __init__(
             self,
+            universe: list[str],
             first_date: str,
             final_date: str,
             alpha_d: pd.DataFrame, 
@@ -15,6 +16,7 @@ class DataBuilder:
             rebal_freq: Literal["D", "W", "M", "Q", "Y", None] = "M",
         ):
         _, U, k = riskmodel.F_cov.shape
+        assert len(universe) == U
         assert riskmodel.d_var.shape[1] == U
         assert alpha_d.shape[1] == U
         assert return_d.shape[1] == U
@@ -24,6 +26,7 @@ class DataBuilder:
         timeline = self._dates_intersection([riskmodel.timeline, return_d.index, rf_d.index])
         timeline = self._dates_truncated(timeline)
 
+        self.universe = universe
         self.timeline = timeline
         self.alpha    = alpha_d.loc[timeline].values
         self.ret      = return_d.loc[timeline].values + 1.0  # use simple returns
@@ -64,7 +67,8 @@ class DataBuilder:
                f" :F  - {self.F_cov.shape}, {type(self.F_cov)}\n" + \
                f" :d  - {self.d_var.shape}, {type(self.d_var)}\n" + \
                f" :am - {self.asset_mask.shape}, {type(self.asset_mask)}\n" + \
-               f" :tf - {self.trade_flag.shape}, {type(self.trade_flag)}\n"
+               f" :tf - {self.trade_flag.shape}, {type(self.trade_flag)}\n" + \
+               f" :universe - {self.universe}"
         
     def _dates_intersection(self, indices: list) -> pd.DatetimeIndex:
         index_overlap = pd.DatetimeIndex(indices[0])
@@ -96,22 +100,21 @@ class DataBuilder:
 class DataLoader:
     def __init__(
             self,
-            tickers: list[str],
-            universe: list[str],
             db: DataBuilder,
+            tickers: list[str],
         ):
         T, U, _ = db.F_cov.shape
         N = len(tickers)
-        assert np.isin(tickers, universe).all()
-        assert len(universe) == U, len(universe)
+        assert np.isin(tickers, db.universe).all()
+        assert len(db.universe) == U, len(db.universe)
 
-        t2i = {t: i for i, t in enumerate(universe)}
+        t2i = {t: i for i, t in enumerate(db.universe)}
         i_N  = np.array([t2i[t] for t in tickers], dtype=int)
         self.T = T
         self.U = U
         self.N = N
         self.tickers  = tickers
-        self.universe = universe
+        self.universe = db.universe
         self.timeline = db.timeline
         self._alpha   = db.alpha[:, i_N]
         self._ret     = db.ret[:, i_N]

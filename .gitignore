@@ -1,4 +1,4 @@
-# data
+# Data files
 *.parquet
 *.csv
 *.npz
@@ -156,6 +156,7 @@ activemq-data/
 *.sage.py
 
 # Environments
+env.sh
 .env
 .envrc
 .venv
