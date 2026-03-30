@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import Literal
+from .riskmodel import Riskmodel
 
 class DataBuilder:
     def __init__(
@@ -10,38 +11,39 @@ class DataBuilder:
             alpha_d: pd.DataFrame, 
             return_d: pd.DataFrame,
             rf_d: pd.DataFrame,
-            riskmodel: dict[str, np.ndarray],
+            riskmodel: Riskmodel,
             rebal_freq: Literal["D", "W", "M", "Q", "Y", None] = "M",
         ):
-        dates_risk = riskmodel["dates"]
-        sigma_sqrt = riskmodel["sigma_sqrt"]
-        _, k, U = sigma_sqrt.shape
-        assert dates_risk.shape[0] == sigma_sqrt.shape[0]
+        _, U, k = riskmodel.F_cov.shape
+        assert riskmodel.d_var.shape[1] == U
         assert alpha_d.shape[1] == U
         assert return_d.shape[1] == U
 
         self.d0 = first_date
         self.d1 = final_date
-        timeline = self._dates_intersection([dates_risk, return_d.index, rf_d.index])
+        timeline = self._dates_intersection([riskmodel.timeline, return_d.index, rf_d.index])
         timeline = self._dates_truncated(timeline)
 
-        self.timeline   = timeline
-        self.alpha      = alpha_d.loc[timeline].values
-        self.ret        = return_d.loc[timeline].values + 1.0  # use simple returns
-        self.rf         = rf_d.loc[timeline].values.ravel() + 1.0  # use simple returns
-        self.sigma_sqrt = sigma_sqrt[np.isin(dates_risk, timeline)]
-        self.asset_mask = ~np.isnan(self.sigma_sqrt).all(axis=1)
+        self.timeline = timeline
+        self.alpha    = alpha_d.loc[timeline].values
+        self.ret      = return_d.loc[timeline].values + 1.0  # use simple returns
+        self.rf       = rf_d.loc[timeline].values.ravel() + 1.0  # use simple returns
+        self.F_cov    = riskmodel.F_cov[np.isin(riskmodel.timeline, timeline)]
+        self.d_var    = riskmodel.d_var[np.isin(riskmodel.timeline, timeline)]
+        self.asset_mask = ~np.isnan(self.F_cov).any(axis=2)
         self.trade_flag = self._trade_flag(timeline, rebal_freq)
         T, = self.trade_flag.shape
 
         self.ret = np.nan_to_num(self.ret, nan=0.0)
-        self.sigma_sqrt = np.nan_to_num(self.sigma_sqrt, nan=0.0)
+        self.F_cov = np.nan_to_num(self.F_cov, nan=0.0)
+        self.d_var = np.nan_to_num(self.d_var, nan=0.0)
 
         assert np.any(np.isnan(self.timeline))   == False
         assert np.any(np.isnan(self.alpha))      == False
         assert np.any(np.isnan(self.ret))        == False
         assert np.any(np.isnan(self.rf))         == False
-        assert np.any(np.isnan(self.sigma_sqrt)) == False
+        assert np.any(np.isnan(self.F_cov))      == False
+        assert np.any(np.isnan(self.d_var))      == False
         assert np.any(np.isnan(self.asset_mask)) == False
         assert np.any(np.isnan(self.trade_flag)) == False
 
@@ -49,7 +51,8 @@ class DataBuilder:
         assert self.alpha.shape      == (T, U)
         assert self.ret.shape        == (T, U)
         assert self.rf.shape         == (T,)
-        assert self.sigma_sqrt.shape == (T, k, U)
+        assert self.F_cov.shape      == (T, U, k)  # F
+        assert self.d_var.shape      == (T, U)     # D
         assert self.asset_mask.shape == (T, U)
         assert self.trade_flag.shape == (T,)
 
@@ -58,7 +61,8 @@ class DataBuilder:
                f" :a  - {self.alpha.shape}, {type(self.alpha)}\n" + \
                f" :r  - {self.ret.shape}, {type(self.ret)}\n" + \
                f" :rf - {self.rf.shape}, {type(self.rf)}\n" + \
-               f" :Ss - {self.sigma_sqrt.shape}, {type(self.sigma_sqrt)}\n" + \
+               f" :F  - {self.F_cov.shape}, {type(self.F_cov)}\n" + \
+               f" :d  - {self.d_var.shape}, {type(self.d_var)}\n" + \
                f" :am - {self.asset_mask.shape}, {type(self.asset_mask)}\n" + \
                f" :tf - {self.trade_flag.shape}, {type(self.trade_flag)}\n"
         
@@ -96,7 +100,7 @@ class DataLoader:
             universe: list[str],
             db: DataBuilder,
         ):
-        T, _, U = db.sigma_sqrt.shape
+        T, U, _ = db.F_cov.shape
         N = len(tickers)
         assert np.isin(tickers, universe).all()
         assert len(universe) == U, len(universe)
@@ -109,10 +113,11 @@ class DataLoader:
         self.tickers  = tickers
         self.universe = universe
         self.timeline = db.timeline
-        self._alpha      = db.alpha[:, i_N]
-        self._ret        = db.ret[:, i_N]
-        self._rf         = db.rf
-        self._sigma_sqrt = db.sigma_sqrt[:, :, i_N]
+        self._alpha   = db.alpha[:, i_N]
+        self._ret     = db.ret[:, i_N]
+        self._rf      = db.rf
+        self._F_cov   = db.F_cov[:, i_N, :]
+        self._d_var   = db.d_var[:, i_N]
         self._asset_mask = db.asset_mask[:, i_N]
         self._trade_flag = db.trade_flag
     
@@ -125,8 +130,11 @@ class DataLoader:
     def get_rf(self, t:int) -> np.ndarray:
         return self._rf[t]
     
-    def get_sigma_sqrt(self, t:int) -> np.ndarray:
-        return self._sigma_sqrt[t]
+    def get_F_cov(self, t:int) -> np.ndarray:
+        return self._F_cov[t]  # [N, k]
+    
+    def get_d_var(self, t:int) -> np.ndarray:
+        return self._d_var[t]
 
     def get_asset_mask(self, t: int) -> np.ndarray:
         return self._asset_mask[t]

@@ -202,3 +202,47 @@
 #     f1_n = 2 * (pre_n * rec_n) / n_pre_rec
 
 #     return accuracy, (pre_p, rec_p, f1_p), (pre_n, rec_n, f1_n)
+
+
+
+
+
+
+
+# customer = pd.DataFrame({
+#     "customer_id": [1,2,3,4],
+#     "birth_date": pd.to_datetime(["2001-01-15", "1992-08-01", "1978-10-11", "1998-09-19"]),
+#     "aquisition_channel": ["Campaign", "Campaign", "Instagram", "Instagram"]
+# })
+
+# order: pd.DataFrame = pd.DataFrame({
+#     "order_id": [1,2,3,4,5,6,7],
+#     "product": ["shoe", "shoe", "t-shirt", "vest", "t-shirt", "cap", "cap"],
+#     "transaction_date": ["2016-03-04","2016-07-30","2017-08-06","2018-04-19","2020-10-28","2021-11-16","2022-04-05"],
+#     "price": [280,450,120,425,190,80,145],
+#     "quantity": [5,17,4,10,12,7,2],
+#     "customer_id": [3,1,1,4,2,1,4]
+# })
+
+# # Q1
+# order2017 = order.loc[order["transaction_date"] <= "2017-12-31"]
+# order2018 = order.loc[order["transaction_date"] >= "2018-01-01"]
+# sales2017 = (order2017["price"] * order2017["quantity"]).sum()
+# sales2018 = (order2018["price"] * order2018["quantity"]).sum()
+
+# relative_difference = (sales2018 / sales2017) - 1.0
+# relative_difference
+
+# # Q2
+# today = pd.to_datetime("2026-03-27")
+# customer["age"] = today.year - customer["birth_date"].dt.year
+# customer["age"] -= today.strftime("%m-%d") < customer["birth_date"].dt.strftime("%m-%d")
+# customer.groupby("aquisition_channel").aggregate({"age":np.median}).reset_index()
+
+# # Q3
+# combined = customer.merge(order, on="customer_id", how="inner")
+# combined_1990_2020 = combined.loc[(combined["birth_date"] >= "1990-01-01") & (combined["birth_date"] <= "2020-12-31")]
+# product_qty = combined_1990_2020.groupby("product").aggregate({"quantity":np.sum}).sort_values(by="quantity", ascending=False)
+# product_qty.index[0]
+
+# combined
