@@ -1,6 +1,7 @@
 # data
 *.parquet
 *.csv
+*.npz
 
 # macOS
 .DS_Store
