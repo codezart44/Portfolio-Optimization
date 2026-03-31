@@ -47,63 +47,63 @@ def t_test(
     return t_val
 
 
-def save_alpha_result(
-        file_path: str,
-        df_prd: pd.Series,
-        df_ref: pd.Series,
-        gamma: float,
-        halflife: int,
-        lookback: int,
-        horizon: int,
-        method: str,
-        const_pred: float,
-        xshape: tuple,
-        yshape: tuple,
-        assets: list[str],
-        features_mac: list[str],
-        features_ret: list[str],
-        target: str,
-    ) -> None:
-    assert isinstance(df_prd, pd.DataFrame), type(df_prd)
-    assert isinstance(df_ref, pd.DataFrame), type(df_ref)
-    assert df_prd.shape == df_ref.shape, (df_prd.shape, df_ref.shape)
-    assert isinstance(assets, str), type(assets)
-    assert isinstance(features_mac, str), type(features_mac)
-    assert isinstance(features_ret, str), type(features_ret)
-    # Eval Scores
+# def save_alpha_result(
+#         file_path: str,
+#         df_prd: pd.Series,
+#         df_ref: pd.Series,
+#         gamma: float,
+#         halflife: int,
+#         lookback: int,
+#         horizon: int,
+#         method: str,
+#         const_pred: float,
+#         xshape: tuple,
+#         yshape: tuple,
+#         assets: list[str],
+#         features_mac: list[str],
+#         features_ret: list[str],
+#         target: str,
+#     ) -> None:
+#     assert isinstance(df_prd, pd.DataFrame), type(df_prd)
+#     assert isinstance(df_ref, pd.DataFrame), type(df_ref)
+#     assert df_prd.shape == df_ref.shape, (df_prd.shape, df_ref.shape)
+#     assert isinstance(assets, str), type(assets)
+#     assert isinstance(features_mac, str), type(features_mac)
+#     assert isinstance(features_ret, str), type(features_ret)
+#     # Eval Scores
 
-    ics = ic_score(df_prd, df_ref, method="spearman", axis=1)  # cross-sectional ranking (strong negative is also good)
-    icp = ic_score(df_prd, df_ref, method="pearson", axis=1)
-    t_ics = t_test(ics, mu_h0=0.0)  # t-test for ic score
-    t_icp = t_test(icp, mu_h0=0.0)
-    nrmse = nrmse_score(df_prd, df_ref, axis=0)  # timing
-    r2 = r2_score(df_prd, df_ref, axis=0)
+#     ics = ic_score(df_prd, df_ref, method="spearman", axis=1)  # cross-sectional ranking (strong negative is also good)
+#     icp = ic_score(df_prd, df_ref, method="pearson", axis=1)
+#     t_ics = t_test(ics, mu_h0=0.0)  # t-test for ic score
+#     t_icp = t_test(icp, mu_h0=0.0)
+#     nrmse = nrmse_score(df_prd, df_ref, axis=0)  # timing
+#     r2 = r2_score(df_prd, df_ref, axis=0)
     
-    df_row = pd.DataFrame([{
-        "ics": np.nan_to_num(ics.mean(), nan=0.0).round(4).item(),
-        "icp": np.nan_to_num(icp.mean(), nan=0.0).round(4).item(),
-        "tics": np.nan_to_num(t_ics, nan=0.0).round(4).item(),
-        "ticp": np.nan_to_num(t_icp, nan=0.0).round(4).item(),
-        "r2": r2.mean().round(4).item(),
-        "nrmse": nrmse.mean().round(4).item(),
-        "gamma": gamma,
-        "halflife": halflife,
-        "lookback": lookback,
-        "horizon": horizon,
-        "method": method,
-        "constpred": const_pred if method == "C" else None,
-        "T": yshape[0],
-        "N": yshape[1],
-        "F": xshape[1] // yshape[1],
-        "assets": assets,
-        "macrof": "" if method == "C" else features_mac,
-        "returnf": "" if method == "C" else features_ret,
-        "target": target,
-    }])
-    df_row.to_csv(
-        file_path, 
-        mode="a", 
-        header=not os.path.exists(file_path), 
-        index=False
-    )
+#     df_row = pd.DataFrame([{
+#         "ics": np.nan_to_num(ics.mean(), nan=0.0).round(4).item(),
+#         "icp": np.nan_to_num(icp.mean(), nan=0.0).round(4).item(),
+#         "tics": np.nan_to_num(t_ics, nan=0.0).round(4).item(),
+#         "ticp": np.nan_to_num(t_icp, nan=0.0).round(4).item(),
+#         "r2": r2.mean().round(4).item(),
+#         "nrmse": nrmse.mean().round(4).item(),
+#         "gamma": gamma,
+#         "halflife": halflife,
+#         "lookback": lookback,
+#         "horizon": horizon,
+#         "method": method,
+#         "constpred": const_pred if method == "C" else None,
+#         "T": yshape[0],
+#         "N": yshape[1],
+#         "F": xshape[1] // yshape[1],
+#         "assets": assets,
+#         "macrof": "" if method == "C" else features_mac,
+#         "returnf": "" if method == "C" else features_ret,
+#         "target": target,
+#     }])
+#     df_row.to_csv(
+#         file_path, 
+#         mode="a", 
+#         header=not os.path.exists(file_path), 
+#         index=False
+#     )
 

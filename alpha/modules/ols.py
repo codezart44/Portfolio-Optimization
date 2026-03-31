@@ -3,6 +3,9 @@ import pandas as pd
 from scipy import linalg
 from typing import Literal, Sequence
 
+
+
+
 def preprocess_alpha_data(
         data_ret: pd.DataFrame,
         data_mac: pd.DataFrame,
@@ -40,27 +43,6 @@ def xy_split(
     xdata = data.drop(columns=to_drop, level=1).reindex(ydata.index).copy()    # For T1M at position t : t-20, ... , t
     assert xdata.shape[0] == ydata.shape[0], (xdata.shape, ydata.shape)
     return xdata, ydata
-
-def laplacian_graph(
-        file_path: str,
-        assets: list[str],
-        attributes: list[str],
-        w_edges: Sequence[float] | None = None,
-    ) -> np.ndarray:  
-
-    df_cat = pd.read_csv(file_path, index_col="Ticker").drop(columns="Name")
-    df_cat = df_cat.loc[assets][attributes]
-    ohe = pd.get_dummies(df_cat).astype(float).values
-
-    _, C = ohe.shape
-    w_edges = np.ones(ohe.shape[1]) if w_edges == None else w_edges
-    assert w_edges.shape == (C,), (w_edges.shape, C)
-    ohe = ohe * np.sqrt(w_edges[None, :])
-    Wm = ohe @ ohe.T
-    Dm = np.diag(Wm.sum(axis=1))
-    L_graph = Dm - Wm
-
-    return L_graph
 
 
 def train_shared(
@@ -117,7 +99,6 @@ def train(
     Xw = Xw.reshape(T, N, F).transpose(1, 0, 2) # [T, NF] -> [N, T, F]
     XwT = Xw.transpose(0, 2, 1)
     Xw2 = XwT @ Xw  # [N, F, F]
-    # Xw2 = np.einsum("ntf,ntg->nfg", Xw, Xw)  # [N, F, F]  # NOTE slower
     assert Xw2.shape == (N, F, F), Xw2.shape
 
     # Aw @ B = bw
@@ -129,7 +110,6 @@ def train(
     Aw = Aw.reshape(NF, NF)
 
     bw = (XwT @ yw.T[:,:,None]).reshape(NF)  # [NF,] !stacked X.T @ y and then flattened
-    # bw = np.einsum("ntf,tn->nf", Xw, yw).reshape(NF)  # NOTE slower
     assert Aw.shape == (NF, NF), Aw.shape
     assert bw.shape == (NF,), bw.shape
 
@@ -145,10 +125,9 @@ def alpha_predictor(
         lap_graph: np.ndarray,  # includes edge weights
         gamma: float = 0.0,
         halflife: int = 126,
-        lookback: int = 504, # 2 yrs lookback for training
-        horizon: int = 21, # 21 days ahead, 1 trading month
-        method: Literal["C", "1", "N"] = "N", # const, one model, N models
-        const_pred: float = 0.0,
+        lookback: int = 504,    # 2 yrs lookback for training
+        horizon: int = 21,      # 21 days ahead, 1 trading month
+        pooled: bool = True,
     ) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray]:
     """ Backtest for alpha predictor - Eval different strategies """
     # T train samples, N assets, F features, L iterations
@@ -186,16 +165,15 @@ def alpha_predictor(
         X_trn = (X_trn - mu) / sd
         X_tst = (X_tst - mu) / sd
 
-        match method:
-            case "C": 
-                Theta = np.ones((N, F))
-                y_prd = np.full_like(y_tst, const_pred)
-            case "1": 
+        match pooled:
+            case True:
                 Theta = train_shared(X_trn, y_trn, w_root, G_f, T, N, F)
                 y_prd = X_tst.reshape(N, F) @ Theta
-            case "N":
+            case False:
                 Theta = train(X_trn, y_trn, w_root, L_nf, G_nf, T, N, F)  # Training            
                 y_prd = (X_tst.reshape(N, F) * Theta).sum(axis=1) # Testing - sum([N, F] * [N, F]) over F
+            case _: 
+                raise ValueError("invalid pooled argument.")
 
         assert y_prd.shape == y_tst.shape, (y_prd.shape, y_tst.shape)  # [N,]
         predictions[t-timeloss] = y_prd
@@ -210,4 +188,27 @@ def alpha_predictor(
 
     assert df_ref.shape == df_prd.shape, (df_ref.shape, df_prd.shape)
     return df_prd, df_ref, thetas
+
+
+
+def laplacian_graph(
+        file_path: str,
+        assets: list[str],
+        attributes: list[str],
+        w_edges: Sequence[float] | None = None,
+    ) -> np.ndarray:  
+
+    df_cat = pd.read_csv(file_path, index_col="Ticker").drop(columns="Name")
+    df_cat = df_cat.loc[assets][attributes]
+    ohe = pd.get_dummies(df_cat).astype(float).values
+
+    _, C = ohe.shape
+    w_edges = np.ones(ohe.shape[1]) if w_edges == None else w_edges
+    assert w_edges.shape == (C,), (w_edges.shape, C)
+    ohe = ohe * np.sqrt(w_edges[None, :])
+    Wm = ohe @ ohe.T
+    Dm = np.diag(Wm.sum(axis=1))
+    L_graph = Dm - Wm
+
+    return L_graph
 
