@@ -1,11 +1,11 @@
 ## Portfolio Optimization
 
 ### Description
-Portfolio Optimization project, conducted at Stanford University under supervision of Prof. Stephen P. Boyd and research members:
-- Nikhil Devanathan
-- Alexandros Tzikas
-- Daniel Cederberg
-- Maximilian Schaller
+Portfolio Optimization project, conducted at Stanford University under supervision of [Prof. Stephen P. Boyd](https://stanford.edu/~boyd/) and research members:
+- [Nikhil Devanathan](https://ndevanathan.github.io/)
+- [Alexandros Tzikas](https://scholar.google.com/citations?user=G8nm_ycAAAAJ&hl=en)
+- [Daniel Cederberg](https://dance858.github.io/)
+- [Maximilian Schaller](https://maxschaller.github.io/)
 
 The goal of this project is to identify and formulate simple methods for portfolio constructions that yields long-term decent and consistent returns. The project employs methods of: volatility control through Markowitz and volatility scaling, alpha generation through return prediction and asset ranking, strategies and meta strategies. 
 
@@ -28,7 +28,7 @@ export FRED_API_KEY="your_key_here"
 ``` 
 Then download data and process risk with the setup command.
 ```zsh
-source setup.sh  # this requires your FRED API key to be set, see 'env'
+source setup.sh
 ```
 
 *Oskar Edén Wallberg (& Alexander Karolin*)

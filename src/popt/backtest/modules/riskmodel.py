@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-class Riskmodel:
+class RiskModel:
     def __init__(
             self,
             k: int,             # 10
