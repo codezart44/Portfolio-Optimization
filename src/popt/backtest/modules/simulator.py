@@ -15,7 +15,7 @@ class BacktestSimulator:
         self.strategy: BacktestStrategy | None = None
         self.time = -1
 
-    def run_backtest(self, strategy: BacktestStrategy, verbose=False) -> None:
+    def run(self, strategy: BacktestStrategy, verbose=False) -> None:
         t0 = time.time()
         dl = strategy.dl
         T, N = dl.T, dl.N  # T timesteps, N etfs
@@ -105,16 +105,8 @@ class BacktestSimulator:
         assert self.strategy is not None
         return self.strategy.dl.timeline
 
-def wealth_plot(sim: BacktestSimulator, figsize=(12,3)) -> None:
-    dl = sim.strategy.dl
-    holdings = sim.pw * (sim.pv-1.0)
-    plt.figure(figsize=figsize)
-    plt.stackplot(dl.timeline, holdings.T, labels=dl.tickers+["Cash"])
-    plt.legend()
-    plt.show()
-
 def print_simulator_results(sim: BacktestSimulator) -> None:
-    print(f"Backtest Runtime: {round(sim.time*1000)} ms")
+    print(f"Predictor Runtime: {round(sim.time*1000)} ms")
     print(f"Ann Sharpe: {sim.ann_sharpe.round(4)}")
     print(f"Tot Ret:    {sim.tot_ret.round(4)}")
     print(f"Ann Ret:    {sim.ann_ret.round(4)}")
@@ -128,3 +120,11 @@ def sharpe_geom(rp: np.ndarray, rf: np.ndarray) -> float:
     ann_ret = ((1.0+rp).prod() / (1.0+rf).prod()) ** (252 / rp.shape[0]) - 1.0
     ann_vol = rp.std(ddof=1) * np.sqrt(252)
     return ann_ret / ann_vol
+
+def wealth_plot(sim: BacktestSimulator, figsize=(12,3)) -> None:
+    dl = sim.strategy.dl
+    holdings = sim.pw * (sim.pv-1.0)
+    plt.figure(figsize=figsize)
+    plt.stackplot(dl.timeline, holdings.T, labels=dl.tickers+["Cash"])
+    plt.legend()
+    plt.show()

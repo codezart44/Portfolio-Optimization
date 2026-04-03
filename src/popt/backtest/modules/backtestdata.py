@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import Literal
-from .riskmodel import Riskmodel
+from .riskmodel import RiskModel
 
 class DataBuilder:
     def __init__(
@@ -12,7 +12,7 @@ class DataBuilder:
             alpha_d: pd.DataFrame, 
             return_d: pd.DataFrame,
             rf_d: pd.DataFrame,
-            riskmodel: Riskmodel,
+            riskmodel: RiskModel,
             rebal_freq: Literal["D", "W", "M", "Q", "Y", None] = "M",
         ):
         _, U, k = riskmodel.F_cov.shape
