@@ -9,28 +9,28 @@ class DataBuilder:
             universe: list[str],
             first_date: str,
             final_date: str,
-            alpha_d: pd.DataFrame, 
-            return_d: pd.DataFrame,
-            rf_d: pd.DataFrame,
+            alpha: pd.DataFrame, 
+            rd: pd.DataFrame,
+            rf: pd.DataFrame,
             riskmodel: RiskModel,
             rebal_freq: Literal["D", "W", "M", "Q", "Y", None] = "M",
         ):
         _, U, k = riskmodel.F_cov.shape
         assert len(universe) == U
         assert riskmodel.d_var.shape[1] == U
-        assert alpha_d.shape[1] == U
-        assert return_d.shape[1] == U
+        assert alpha.shape[1] == U
+        assert rd.shape[1] == U
 
         self.d0 = first_date
         self.d1 = final_date
-        timeline = self._dates_intersection([riskmodel.timeline, return_d.index, rf_d.index])
+        timeline = self._dates_intersection([riskmodel.timeline, rd.index, rf.index])
         timeline = self._dates_truncated(timeline)
 
         self.universe = universe
         self.timeline = timeline
-        self.alpha    = alpha_d.loc[timeline].values
-        self.ret      = return_d.loc[timeline].values + 1.0  # use simple returns
-        self.rf       = rf_d.loc[timeline].values.ravel() + 1.0  # use simple returns
+        self.alpha    = alpha.loc[timeline].values
+        self.ret      = rd.loc[timeline].values + 1.0  # use simple returns
+        self.rf       = rf.loc[timeline].values.ravel() + 1.0  # use simple returns
         self.F_cov    = riskmodel.F_cov[np.isin(riskmodel.timeline, timeline)]
         self.d_var    = riskmodel.d_var[np.isin(riskmodel.timeline, timeline)]
         self.asset_mask = ~np.isnan(self.F_cov).any(axis=2)

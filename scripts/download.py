@@ -25,7 +25,7 @@ ohlcv: pd.DataFrame = yf.download(
     start=FIRST_DATE, 
     end=FINAL_DATE, 
     auto_adjust=AUTO_ADJUST,
-    progress=False,  # silence download progress bar
+    progress=True,  # silence download progress bar
     )
 
 trading_days: pd.DatetimeIndex = ohlcv["Close"]["SPY"].dropna().index

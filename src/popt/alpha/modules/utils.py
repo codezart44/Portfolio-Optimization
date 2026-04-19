@@ -3,107 +3,84 @@ import pandas as pd
 from typing import Literal, Sequence
 import os
 
-def rmse(e: np.ndarray, axis=0) -> float:
-    return np.sqrt(np.mean(e**2, axis=axis))
+def tail_mask(y: np.ndarray, n_keep: int) -> np.ndarray:
+    mask = np.zeros_like(y)
+    T = y.shape[0]
+    order = np.argsort(y, axis=1)
+    rows = np.arange(T)[:, None]
+    mask[rows, order[:,  :n_keep]] = 1
+    mask[rows, order[:, -n_keep:]] = 1
+    return mask
 
-def mae(e: np.ndarray, axis=0) -> float:
-    return np.mean(np.abs(e), axis=axis)
+def rank(y: np.ndarray, axis=1) -> np.ndarray:
+    return np.argsort(np.argsort(y, axis=axis), axis=axis)
 
-def nrmse_score(
-        df_prd: pd.DataFrame,
-        df_ref: pd.DataFrame,
-        axis: int = 0
-    ) -> pd.DataFrame:
-    mu = df_ref.mean(axis=axis)
-    nrmse_asset = (rmse(df_ref - df_prd) / rmse(df_ref - mu, axis=axis))
-    return nrmse_asset
+def rank_cs(y: np.ndarray, axis: int = 1) -> np.ndarray:
+    order = np.argsort(np.argsort(y, axis=axis), axis=axis)
+    N = y.shape[axis]
+    return 2.0 * order / (N - 1) - 1.0
 
-def r2_score(
-        df_prd: pd.DataFrame, 
-        df_ref: pd.DataFrame,
-        axis: int = 0,
-    ) -> pd.DataFrame:
-    mu = df_ref.mean(axis=axis)
-    r2_asset = 1 - ((df_ref - df_prd)**2).sum(axis=0) / ((df_ref - mu)**2).sum(axis=axis)
-    return r2_asset
+def signed_pow(y: np.ndarray, pow: int) -> np.ndarray:
+    return np.sign(y) * (np.abs(y)**pow)
 
-def ic_score(  # NOTE Preferable for cross-sectional asset prediction
-        df_prd: pd.DataFrame, 
-        df_ref: pd.DataFrame, 
-        method: Literal["pearson", "spearman"] = "spearman",
-        axis: int = 1,
-    ) -> pd.Series:
-    ic = df_prd.corrwith(df_ref, axis=axis, method=method,)
+def ic_score(
+        a1: np.ndarray, 
+        a2: np.ndarray, 
+        method: Literal["spearman", "pearson"] = "spearman"
+    ) -> np.ndarray:
+    assert a1.shape == a2.shape
+    T = a1.shape[0]
+    ic = np.full((T,), fill_value=np.nan, dtype=float)
+    notna = ~np.isnan(a1).any(axis=1) & ~np.isnan(a2).any(axis=1)
+    match method:
+        case "spearman":
+            a1_ = rank(a1[notna])
+            a2_ = rank(a2[notna])
+        case "pearson":
+            a1_ = a1[notna]
+            a2_ = a2[notna]
+        case _:
+            raise ValueError
+    a1_ = a1_ - a1_.mean(axis=1, keepdims=True)
+    a2_ = a2_ - a2_.mean(axis=1, keepdims=True)
+    
+    cov = (a1_ * a2_).sum(axis=1)
+    std = np.sqrt(np.nansum(a1_**2, axis=1) * np.nansum(a2_**2, axis=1)) + 1e-8
+    ic[notna] = cov / std
     return ic
 
-def t_test(
-        samples: pd.Series,
-        mu_h0: float = 0.0,
-    ) -> float:
-    mu = samples.mean()
-    sd = samples.std()
-    N = samples.count()
-    t_val = (mu - mu_h0) / (sd / np.sqrt(N))
-    return t_val
 
 
-# def save_alpha_result(
-#         file_path: str,
-#         df_prd: pd.Series,
-#         df_ref: pd.Series,
-#         gamma: float,
-#         halflife: int,
-#         lookback: int,
-#         horizon: int,
-#         method: str,
-#         const_pred: float,
-#         xshape: tuple,
-#         yshape: tuple,
-#         assets: list[str],
-#         features_mac: list[str],
-#         features_ret: list[str],
-#         target: str,
-#     ) -> None:
-#     assert isinstance(df_prd, pd.DataFrame), type(df_prd)
-#     assert isinstance(df_ref, pd.DataFrame), type(df_ref)
-#     assert df_prd.shape == df_ref.shape, (df_prd.shape, df_ref.shape)
-#     assert isinstance(assets, str), type(assets)
-#     assert isinstance(features_mac, str), type(features_mac)
-#     assert isinstance(features_ret, str), type(features_ret)
-#     # Eval Scores
+# def rmse(e: np.ndarray, axis=0) -> float:
+#     return np.sqrt(np.mean(e**2, axis=axis))
 
-#     ics = ic_score(df_prd, df_ref, method="spearman", axis=1)  # cross-sectional ranking (strong negative is also good)
-#     icp = ic_score(df_prd, df_ref, method="pearson", axis=1)
-#     t_ics = t_test(ics, mu_h0=0.0)  # t-test for ic score
-#     t_icp = t_test(icp, mu_h0=0.0)
-#     nrmse = nrmse_score(df_prd, df_ref, axis=0)  # timing
-#     r2 = r2_score(df_prd, df_ref, axis=0)
-    
-#     df_row = pd.DataFrame([{
-#         "ics": np.nan_to_num(ics.mean(), nan=0.0).round(4).item(),
-#         "icp": np.nan_to_num(icp.mean(), nan=0.0).round(4).item(),
-#         "tics": np.nan_to_num(t_ics, nan=0.0).round(4).item(),
-#         "ticp": np.nan_to_num(t_icp, nan=0.0).round(4).item(),
-#         "r2": r2.mean().round(4).item(),
-#         "nrmse": nrmse.mean().round(4).item(),
-#         "gamma": gamma,
-#         "halflife": halflife,
-#         "lookback": lookback,
-#         "horizon": horizon,
-#         "method": method,
-#         "constpred": const_pred if method == "C" else None,
-#         "T": yshape[0],
-#         "N": yshape[1],
-#         "F": xshape[1] // yshape[1],
-#         "assets": assets,
-#         "macrof": "" if method == "C" else features_mac,
-#         "returnf": "" if method == "C" else features_ret,
-#         "target": target,
-#     }])
-#     df_row.to_csv(
-#         file_path, 
-#         mode="a", 
-#         header=not os.path.exists(file_path), 
-#         index=False
-#     )
+# def mae(e: np.ndarray, axis=0) -> float:
+#     return np.mean(np.abs(e), axis=axis)
 
+# def nrmse_score(
+#         df_prd: pd.DataFrame,
+#         df_ref: pd.DataFrame,
+#         axis: int = 0
+#     ) -> pd.DataFrame:
+#     mu = df_ref.mean(axis=axis)
+#     nrmse_asset = (rmse(df_ref - df_prd) / rmse(df_ref - mu, axis=axis))
+#     return nrmse_asset
+
+# def r2_score(
+#         df_prd: pd.DataFrame, 
+#         df_ref: pd.DataFrame,
+#         axis: int = 0,
+#     ) -> pd.DataFrame:
+#     mu = df_ref.mean(axis=axis)
+#     r2_asset = 1 - ((df_ref - df_prd)**2).sum(axis=0) / ((df_ref - mu)**2).sum(axis=axis)
+#     return r2_asset
+
+# def t_test(
+#         samples: pd.Series,
+#         mu_h0: float = 0.0,
+#     ) -> float:
+#     mu = samples.mean()
+#     sd = samples.std()
+#     N = samples.count()
+#     t_val = (mu - mu_h0) / (sd / np.sqrt(N))
+#     return t_val
