@@ -1,5 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from popt.alpha.modules.utils import signed_pow, tail_mask
 
 class AlphaPredictor(ABC):
     def __init__(self, lookback: int):
@@ -36,8 +37,19 @@ class RidgeRanker(AlphaPredictor):
         T, N, F = xt.shape
         TN = T*N
         assert yt.shape == (T, N), yt.shape
+        
         xw = xt * self.w_ewma[:,None,None]
         yw = yt * self.w_ewma[:,None]
+
+        yw = signed_pow(yw, pow=2) # NOTE
+        
+        # yw *= tail_mask(yw, n_keep=3)
+
+        # wt = 1.0 + 1.0 * np.abs(yt) ** 2   # (T, N)
+        # sw = np.sqrt(wt)
+        # yw *= sw
+        # xw *= sw[:,:,None]
+
         xw = xw.reshape(TN, F)
         yw = yw.reshape(TN,)
 
