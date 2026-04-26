@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from typing import Literal
 from popt.backtest.modules.riskmodel import RiskModel
 
 class DataBuilder:
@@ -13,7 +12,6 @@ class DataBuilder:
             rd: pd.DataFrame,
             rf: pd.DataFrame,
             riskmodel: RiskModel,
-            rebal_freq: Literal["D", "W", "M", "Q", "Y", None] = "M",
         ):
         _, U, k = riskmodel.F_cov.shape
         assert len(universe) == U
@@ -34,8 +32,7 @@ class DataBuilder:
         self.F_cov    = riskmodel.F_cov[np.isin(riskmodel.timeline, timeline)]
         self.d_var    = riskmodel.d_var[np.isin(riskmodel.timeline, timeline)]
         self.asset_mask = ~np.isnan(self.F_cov).any(axis=2)
-        self.trade_flag = self._trade_flag(timeline, rebal_freq)
-        T, = self.trade_flag.shape
+        T = self.timeline.shape[0]
 
         self.ret = np.nan_to_num(self.ret, nan=0.0)
         self.F_cov = np.nan_to_num(self.F_cov, nan=0.0)
@@ -48,7 +45,6 @@ class DataBuilder:
         assert np.any(np.isnan(self.F_cov))      == False
         assert np.any(np.isnan(self.d_var))      == False
         assert np.any(np.isnan(self.asset_mask)) == False
-        assert np.any(np.isnan(self.trade_flag)) == False
 
         assert self.timeline.shape   == (T, )
         assert self.alpha.shape      == (T, U)
@@ -57,7 +53,6 @@ class DataBuilder:
         assert self.F_cov.shape      == (T, U, k)  # F
         assert self.d_var.shape      == (T, U)     # D
         assert self.asset_mask.shape == (T, U)
-        assert self.trade_flag.shape == (T,)
 
     def __repr__(self):
         return f"{self.d0} : {self.d1}\n" + \
@@ -67,7 +62,6 @@ class DataBuilder:
                f" :F  - {self.F_cov.shape}, {type(self.F_cov)}\n" + \
                f" :d  - {self.d_var.shape}, {type(self.d_var)}\n" + \
                f" :am - {self.asset_mask.shape}, {type(self.asset_mask)}\n" + \
-               f" :tf - {self.trade_flag.shape}, {type(self.trade_flag)}\n" + \
                f" :universe - {self.universe}"
         
     def _dates_intersection(self, indices: list) -> pd.DatetimeIndex:
@@ -82,22 +76,9 @@ class DataBuilder:
         index: pd.DatetimeIndex = index[(self.d0 <= index) & (index <= self.d1)]
         return index
     
-    def _trade_flag(self, timeline: pd.DatetimeIndex, rebal_freq: str) -> np.ndarray:
-        months, quarters, years = timeline.month, timeline.quarter, timeline.year
-        match rebal_freq:
-            case "D":  rebal_flag = np.ones(timeline.shape[0], dtype=bool)
-            case "W":  rebal_flag = (timeline.weekday == 4)  # 4 extra rebal on red fridays over 20 years, negligible
-            case "M":  rebal_flag = months != np.roll(months, shift=-1)
-            case "Q":  rebal_flag = quarters != np.roll(quarters, shift=-1)
-            case "Y":  rebal_flag = years != np.roll(years, shift=-1)
-            case None: rebal_flag = np.zeros(timeline.shape[0], dtype=bool)
-            case _: raise ValueError("Invalid rebal frequency")
-        rebal_flag[1] = True  # first day is initial state, second day we trade according to strategy
-        return rebal_flag
-
 
 # Convention: Data at day t is t inclusive always.
-class DataLoader:
+class DataView:
     def __init__(
             self,
             db: DataBuilder,
@@ -122,7 +103,7 @@ class DataLoader:
         self._F_cov   = db.F_cov[:, i_N, :]
         self._d_var   = db.d_var[:, i_N]
         self._asset_mask = db.asset_mask[:, i_N]
-        self._trade_flag = db.trade_flag
+        # self._trade_flag = db.trade_flag
     
     def get_alpha(self, t:int) -> np.ndarray:
         return self._alpha[t]
@@ -141,6 +122,3 @@ class DataLoader:
 
     def get_asset_mask(self, t: int) -> np.ndarray:
         return self._asset_mask[t]
-    
-    def get_trade_flag(self, t: int) -> int:
-        return self._trade_flag[t]

@@ -17,8 +17,8 @@ class BacktestSimulator:
 
     def run(self, strategy: BacktestStrategy, verbose=False) -> None:
         t0 = time.time()
-        dl = strategy.dl
-        T, N = dl.T, dl.N  # T timesteps, N etfs
+        dv = strategy.dv
+        T, N = dv.T, dv.N  # T timesteps, N etfs
         
         portfolio_weights = np.empty((T, N+1), dtype=float)
         portfolio_value = np.empty((T, 1), dtype=float)
@@ -31,7 +31,7 @@ class BacktestSimulator:
         portfolio_value[0] = v
 
         for t in range(1, T):
-            asset_mask = dl.get_asset_mask(t)  # discontinuation known beginning of day t
+            asset_mask = dv.get_asset_mask(t)  # discontinuation known beginning of day t
             liq = w[~asset_mask].sum()
             if liq > 0.0:
                 w_cash += liq  # converted to cash, no turnover
@@ -46,7 +46,7 @@ class BacktestSimulator:
                 v -= self.spread * turnover * v
 
             # market opens - realizing returns, today t
-            r, rf = dl.get_return(t), dl.get_rf(t)
+            r, rf = dv.get_return(t), dv.get_rf(t)
             g = w @ r + w_cash * rf
             v *= g
 
@@ -70,7 +70,7 @@ class BacktestSimulator:
         assert self.strategy is not None
         pv = self.pv
         rp = pv[1:] / pv[:-1] - 1.0
-        rf = self.strategy.dl._rf[1:].ravel() - 1.0
+        rf = self.strategy.dv._rf[1:].ravel() - 1.0
         return sharpe_geom(rp, rf)
 
     @property
@@ -103,7 +103,7 @@ class BacktestSimulator:
     @property
     def timeline(self) -> pd.DatetimeIndex:
         assert self.strategy is not None
-        return self.strategy.dl.timeline
+        return self.strategy.dv.timeline
 
 def print_simulator_results(sim: BacktestSimulator) -> None:
     print(f"Backtest Runtime: {round(sim.time*1000)} ms")
@@ -122,9 +122,9 @@ def sharpe_geom(rp: np.ndarray, rf: np.ndarray) -> float:
     return ann_ret / ann_vol
 
 def wealth_plot(sim: BacktestSimulator, figsize=(12,3)) -> None:
-    dl = sim.strategy.dl
+    dv = sim.strategy.dv
     holdings = sim.pw * sim.pv  #(sim.pv-1.0)
     plt.figure(figsize=figsize)
-    plt.stackplot(dl.timeline, holdings.T, labels=dl.tickers+["Cash"])
+    plt.stackplot(dv.timeline, holdings.T, labels=dv.tickers+["Cash"])
     plt.legend()
     plt.show()
